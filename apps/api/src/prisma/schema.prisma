@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User ──────────────────────────────────────────────────────────────────────
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  username    String   @unique
+  passwordHash String? // null for OAuth users
+  avatarUrl   String?
+  bio         String?
+  isOnline    Boolean  @default(false)
+  lastSeen    DateTime?
+
+  // OAuth
+  googleId    String?  @unique
+
+  // Relations
+  rooms       RoomMember[]
+  sentMessages     Message[]    @relation("SentMessages")
+  reactions        MessageReaction[]
+  notifications    Notification[]
+  refreshTokens    RefreshToken[]
+
+  // Contacts
+  contactsAdded    Contact[] @relation("ContactAdder")
+  contactsReceived Contact[] @relation("ContactReceiver")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+  @@index([username])
+}
+
+// ─── Contact / Friends ────────────────────────────────────────────────────────
+model Contact {
+  id         String   @id @default(uuid())
+  adderId    String
+  receiverId String
+  status     ContactStatus @default(PENDING)
+  adder      User     @relation("ContactAdder", fields: [adderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ContactReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([adderId, receiverId])
+  @@index([adderId])
+  @@index([receiverId])
+}
+
+enum ContactStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+// ─── Room ─────────────────────────────────────────────────────────────────────
+model Room {
+  id          String   @id @default(uuid())
+  name        String?
+  type        RoomType @default(DIRECT)
+  avatarUrl   String?
+  description String?
+  members     RoomMember[]
+  messages    Message[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+}
+
+enum RoomType {
+  DIRECT
+  GROUP
+}
+
+model RoomMember {
+  id       String     @id @default(uuid())
+  userId   String
+  roomId   String
+  role     MemberRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room     Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+  @@index([roomId])
+  @@index([userId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── Message ──────────────────────────────────────────────────────────────────
+model Message {
+  id          String      @id @default(uuid())
+  roomId      String
+  senderId    String
+  type        MessageType @default(TEXT)
+  content     String
+  mediaUrl    String?
+  mediaType   String?
+  replyToId   String?
+  mentions    String[]    @default([])  // array of user IDs
+  isDeleted   Boolean     @default(false)
+  expiresAt   DateTime?   // disappearing messages
+
+  // Full-text search vector
+  searchVector Unsupported("tsvector")?
+
+  sender      User        @relation("SentMessages", fields: [senderId], references: [id])
+  room        Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  replyTo     Message?    @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies     Message[]   @relation("MessageReplies")
+  reactions   MessageReaction[]
+  statuses    MessageStatus[]
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([roomId, createdAt(sort: Desc)])
+  @@index([senderId])
+  @@index([expiresAt])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  AUDIO
+  STICKER
+}
+
+model MessageStatus {
+  id        String         @id @default(uuid())
+  messageId String
+  userId    String
+  status    DeliveryStatus @default(SENT)
+  message   Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  updatedAt DateTime       @updatedAt
+
+  @@unique([messageId, userId])
+}
+
+enum DeliveryStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+model MessageReaction {
+  id        String  @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json             @default("{}")
+  isRead    Boolean          @default(false)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+enum NotificationType {
+  MESSAGE
+  MENTION
+  CALL
+  FRIEND_REQUEST
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}

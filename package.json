@@ -1,0 +1,35 @@
+{
+  "name": "electron-chat",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.8.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "db:generate": "cd apps/api && npx prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "cd apps/api && npx prisma migrate dev --schema prisma/schema.prisma",
+    "db:studio": "cd apps/api && npx prisma studio --schema prisma/schema.prisma",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "turbo": "^2.8.20",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "@redis-dev-panel/cli": "^1.1.5"
+  }
+}
